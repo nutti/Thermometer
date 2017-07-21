@@ -1,6 +1,6 @@
 import bpy
 from bpy.props import BoolProperty, FloatProperty, StringProperty, PointerProperty
-from bpy.app.handlers import persistent\
+from bpy.app.handlers import persistent
 import bgl
 import blf
 import time
@@ -60,7 +60,7 @@ class Thermometer(bpy.types.Operator):
 
     __timer = None
     __handle = None
-    
+
     @staticmethod
     def __handle_add(self, context):
         if Thermometer.__handle is None:
@@ -73,9 +73,9 @@ class Thermometer(bpy.types.Operator):
     def __handle_remove(self, context):
         if Thermometer.__handle is not None:
             bpy.types.SpaceView3D.draw_handler_remove(
-                Thermometer.__render, 'WINDOW'
+                Thermometer.__handle, 'WINDOW'
             )
-            Thermomter.__handle = None
+            Thermometer.__handle = None
 
     def __get_temperature(self, props, prefs):
         with open(prefs.bus_path) as file:
@@ -86,15 +86,18 @@ class Thermometer(bpy.types.Operator):
                 props.temperature = float(words[-1][2:]) / 1000.0
 
     def __update_text(self, props):
-        text_obj = bpy.data.objects['Temperature']
-        if text_obj is not None:
+        if not "Temperature" in bpy.data.objects:
+            bpy.ops.object.text_add()
+            bpy.context.active_object.name = "Temperature"
+        text_obj = bpy.data.objects["Temperature"]
+        if text_obj.type == 'TEXT':
             text_obj.data.body = str(props.temperature)
 
     @staticmethod
     def __get_region(context, area_type, region_type):
         region = None
         area = None
-        
+
         for a in context.screen.areas:
             if a.type == area_type:
                 area = a
@@ -113,25 +116,34 @@ class Thermometer(bpy.types.Operator):
     def __draw_line(x1, y1, x2, y2):
         bgl.glColor3f(1.0, 1.0, 1.0)
         bgl.glLineWidth(1.0)
-        bgl.glBegin(bgl.LINE)
+        bgl.glBegin(bgl.GL_LINES)
         bgl.glVertex3f(x1, y1, 0.0)
         bgl.glVertex3f(x2, y2, 0.0)
         bgl.glEnd()
 
     @staticmethod
     def __render(context):
+        if not hasattr(context.scene, "t_props"):
+            return
         props = context.scene.t_props
 
         region = Thermometer.__get_region(context, 'VIEW_3D', 'WINDOW')
         if region is None:
             return
-        
-        blf.size(0, 40, 72)
-        blf.position(0, 40, 100, 0)
+
+        blf.size(0, 16, 72)
+        blf.position(0, 40, region.height - 60, 0)
         blf.draw(0, str(props.temperature))
 
-        Thermometer.__draw_line(40.0, region.height - 40.0,
-                                200.0, region.height - 40.0)
+        start_x = 40.0
+        end_x = 200.0
+        base_y = 100.0
+        base_len_y1 = 5.0
+        base_len_y2 = 5.0
+        Thermometer.__draw_line(start_x, region.height - base_y,
+                                end_x, region.height - base_y)
+        Thermometer.__draw_line(start_x, region.height - base_y - base_len_y1,
+                                start_x, region.height - base_y + base_len_y2)
 
     def modal(self, context, event):
         props = context.scene.t_props
@@ -147,7 +159,7 @@ class Thermometer(bpy.types.Operator):
             context.area.tag_redraw()
 
         self.__get_temperature(props, prefs)
-        
+
         self.__update_text(props)
 
         return {'PASS_THROUGH'}
