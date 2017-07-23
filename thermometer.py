@@ -122,6 +122,67 @@ class Thermometer(bpy.types.Operator):
         bgl.glEnd()
 
     @staticmethod
+    def __draw_scale(props, region):
+        start_x = 40.0
+        end_x = 500.0
+        base_y = 100.0
+        base_len_y1 = 3.0
+        base_len_y2 = 10.0
+        min_temp = -10
+        max_temp = 50
+        temp_range = max_temp - min_temp
+
+        blf.size(0, 12, 72)
+
+        Thermometer.__draw_line(start_x, region.height - base_y,
+                                end_x, region.height - base_y)
+        interval = (end_x - start_x) / temp_range
+        for t in range(min_temp, max_temp + 1):
+            offset = interval * (t - min_temp)
+            if t % 10 == 0:
+                Thermometer.__draw_line(start_x + offset,
+                                        region.height - base_y - base_len_y1,
+                                        start_x + offset,
+                                        region.height - base_y + base_len_y2)
+                blf.position(0,
+                             start_x + offset - 2.0,
+                             region.height - base_y - base_len_y1 - 15.0,
+                             0)
+                blf.draw(0, "{0}".format(t))
+            elif t % 5 == 0:
+                Thermometer.__draw_line(start_x + offset,
+                                        region.height - base_y,
+                                        start_x + offset,
+                                        region.height - base_y + base_len_y2 / 2.0)
+            else:
+                Thermometer.__draw_line(start_x + offset,
+                                        region.height - base_y,
+                                        start_x + offset,
+                                        region.height - base_y + base_len_y2 / 4.0)
+
+        bgl.glEnable(bgl.GL_BLEND)
+        bgl.glColor4f((props.temperature - min_temp) / temp_range, 0.0, 1.0 - (props.temperature - min_temp) / temp_range, 0.8)
+        bgl.glBegin(bgl.GL_QUADS)
+        bgl.glVertex3f(start_x, region.height - base_y + base_len_y2, 0.0)
+        bgl.glVertex3f(start_x, region.height - base_y, 0.0)
+        bgl.glVertex3f(start_x + interval * (props.temperature - min_temp),
+                       region.height - base_y, 0.0)
+        bgl.glVertex3f(start_x + interval * (props.temperature - min_temp),
+                       region.height - base_y + base_len_y2, 0.0)
+        bgl.glEnd()
+        bgl.glDisable(bgl.GL_BLEND)
+
+    @staticmethod
+    def __draw_analog(region, props):
+        Thermometer.__draw_scale(props, region)
+
+    @staticmethod
+    def __draw_digital(region, props):
+        blf.size(0, 16, 72)
+        blf.position(0, 40, region.height - 60, 0)
+        blf.draw(0, "{0}".format(props.temperature))
+
+    @staticmethod
     def __render(context):
         if not hasattr(context.scene, "t_props"):
             return
@@ -131,19 +192,8 @@ class Thermometer(bpy.types.Operator):
         if region is None:
             return
 
-        blf.size(0, 16, 72)
-        blf.position(0, 40, region.height - 60, 0)
-        blf.draw(0, str(props.temperature))
-
-        start_x = 40.0
-        end_x = 200.0
-        base_y = 100.0
-        base_len_y1 = 5.0
-        base_len_y2 = 5.0
-        Thermometer.__draw_line(start_x, region.height - base_y,
-                                end_x, region.height - base_y)
-        Thermometer.__draw_line(start_x, region.height - base_y - base_len_y1,
-                                start_x, region.height - base_y + base_len_y2)
+        Thermometer.__draw_digital(region, props)
+        Thermometer.__draw_analog(region, props)
 
     def modal(self, context, event):
         props = context.scene.t_props
@@ -243,6 +293,7 @@ def info_header_fn(self, context):
 @persistent
 def start_fn(scene):
     bpy.app.handlers.scene_update_pre.remove(start_fn)
+    bpy.ops.object.mode_set(mode='OBJECT')
     context = get_invoke_context('VIEW_3D', 'WINDOW')
     bpy.ops.system.temperature(context, 'INVOKE_DEFAULT')
 
