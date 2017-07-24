@@ -1,9 +1,17 @@
+import time
+
 import bpy
-from bpy.props import BoolProperty, FloatProperty, StringProperty, PointerProperty
+from bpy.props import (
+        BoolProperty,
+        FloatProperty,
+        StringProperty,
+        PointerProperty
+    )
 from bpy.app.handlers import persistent
+from mathutils import Color
 import bgl
 import blf
-import time
+
 
 
 bl_info = {
@@ -86,12 +94,40 @@ class Thermometer(bpy.types.Operator):
                 props.temperature = float(words[-1][2:]) / 1000.0
 
     def __update_text(self, props):
-        if not "Temperature" in bpy.data.objects:
+        if not "Temperature_Text" in bpy.data.objects:
             bpy.ops.object.text_add()
-            bpy.context.active_object.name = "Temperature"
-        text_obj = bpy.data.objects["Temperature"]
-        if text_obj.type == 'TEXT':
+            bpy.context.active_object.name = "Temperature_Text"
+        text_obj = bpy.data.objects["Temperature_Text"]
+        if text_obj.type == 'FONT':
             text_obj.data.body = str(props.temperature)
+
+    def __update_suzanne(self, props):
+        # make object
+        if not "Temperature_Suzanne" in bpy.data.objects:
+            bpy.ops.mesh.primitive_monkey_add()
+            bpy.context.active_object.name = "Temperature_Suzanne"
+        suzanne_obj = bpy.data.objects["Temperature_Suzanne"]
+
+        # make material
+        if len(bpy.data.materials) == 0:
+            bpy.ops.material.new()
+
+        # make material slot
+        if len(suzanne_obj.material_slots) == 0:
+            bpy.context.scene.objects.active = suzanne_obj
+            bpy.ops.object.material_slot_add()
+            suzanne_obj.material_slots[0].material = bpy.data.materials['Material']
+        mtrl = suzanne_obj.material_slots[0].material
+
+        # change color
+        min_temp = -10
+        max_temp = 50
+        temp_range = max_temp - min_temp
+        mtrl.diffuse_color = Color((
+            (props.temperature - min_temp) / temp_range,
+            0.0,
+            1.0 - (props.temperature - min_temp) / temp_range
+        ))
 
     @staticmethod
     def __get_region(context, area_type, region_type):
@@ -211,6 +247,7 @@ class Thermometer(bpy.types.Operator):
         self.__get_temperature(props, prefs)
 
         self.__update_text(props)
+        self.__update_suzanne(props)
 
         return {'PASS_THROUGH'}
 
