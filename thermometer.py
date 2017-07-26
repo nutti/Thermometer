@@ -1,4 +1,4 @@
-import time
+from datetime import datetime
 
 import bpy
 from bpy.props import (
@@ -27,6 +27,46 @@ bl_info = {
     "tracker_url": "",
     "category": "System"
 }
+
+
+def bgl_draw_line(x1, y1, x2, y2):
+    bgl.glColor3f(1.0, 1.0, 1.0)
+    bgl.glLineWidth(1.0)
+    bgl.glBegin(bgl.GL_LINES)
+    bgl.glVertex3f(x1, y1, 0.0)
+    bgl.glVertex3f(x2, y2, 0.0)
+    bgl.glEnd()
+
+
+def bgl_draw_rect(x1, y1, x2, y2, color):
+    bgl.glEnable(bgl.GL_BLEND)
+    bgl.glColor4f(*color)
+    bgl.glBegin(bgl.GL_QUADS)
+    bgl.glVertex3f(x1, y2, 0.0)
+    bgl.glVertex3f(x1, y1, 0.0)
+    bgl.glVertex3f(x2, y1, 0.0)
+    bgl.glVertex3f(x2, y2, 0.0)
+    bgl.glEnd()
+    bgl.glDisable(bgl.GL_BLEND)
+
+
+def get_region(context, area_type, region_type):
+    region = None
+    area = None
+
+    for a in context.screen.areas:
+        if a.type == area_type:
+            area = a
+            break
+    else:
+        return None
+
+    for r in area.regions:
+        if r.type == region_type:
+            region = r
+            break
+
+    return region
 
 
 def get_invoke_context(area_type, region_type):
@@ -130,38 +170,10 @@ class Thermometer(bpy.types.Operator):
         ))
 
     @staticmethod
-    def __get_region(context, area_type, region_type):
-        region = None
-        area = None
-
-        for a in context.screen.areas:
-            if a.type == area_type:
-                area = a
-                break
-        else:
-            return None
-
-        for r in area.regions:
-            if r.type == region_type:
-                region = r
-                break
-
-        return region
-
-    @staticmethod
-    def __draw_line(x1, y1, x2, y2):
-        bgl.glColor3f(1.0, 1.0, 1.0)
-        bgl.glLineWidth(1.0)
-        bgl.glBegin(bgl.GL_LINES)
-        bgl.glVertex3f(x1, y1, 0.0)
-        bgl.glVertex3f(x2, y2, 0.0)
-        bgl.glEnd()
-
-    @staticmethod
-    def __draw_scale(props, region):
-        start_x = 40.0
-        end_x = 500.0
-        base_y = 100.0
+    def __draw_analog(region, props, prefs):
+        start_x = prefs.ana_position[0]
+        end_x = prefs.ana_position[0] + 460.0
+        base_y = prefs.ana_position[1]
         base_len_y1 = 3.0
         base_len_y2 = 10.0
         min_temp = -10
@@ -170,66 +182,78 @@ class Thermometer(bpy.types.Operator):
 
         blf.size(0, 12, 72)
 
-        Thermometer.__draw_line(start_x, region.height - base_y,
-                                end_x, region.height - base_y)
+        bgl_draw_line(start_x, region.height - base_y,
+                      end_x, region.height - base_y)
         interval = (end_x - start_x) / temp_range
         for t in range(min_temp, max_temp + 1):
             offset = interval * (t - min_temp)
             if t % 10 == 0:
-                Thermometer.__draw_line(start_x + offset,
-                                        region.height - base_y - base_len_y1,
-                                        start_x + offset,
-                                        region.height - base_y + base_len_y2)
+                bgl_draw_line(start_x + offset,
+                              region.height - base_y - base_len_y1,
+                              start_x + offset,
+                              region.height - base_y + base_len_y2)
                 blf.position(0,
                              start_x + offset - 2.0,
                              region.height - base_y - base_len_y1 - 15.0,
                              0)
                 blf.draw(0, "{0}".format(t))
             elif t % 5 == 0:
-                Thermometer.__draw_line(start_x + offset,
-                                        region.height - base_y,
-                                        start_x + offset,
-                                        region.height - base_y + base_len_y2 / 2.0)
+                bgl_draw_line(start_x + offset,
+                              region.height - base_y,
+                              start_x + offset,
+                              region.height - base_y + base_len_y2 / 2.0)
             else:
-                Thermometer.__draw_line(start_x + offset,
-                                        region.height - base_y,
-                                        start_x + offset,
-                                        region.height - base_y + base_len_y2 / 4.0)
+                bgl_draw_line(start_x + offset,
+                              region.height - base_y,
+                              start_x + offset,
+                              region.height - base_y + base_len_y2 / 4.0)
 
-        bgl.glEnable(bgl.GL_BLEND)
-        bgl.glColor4f((props.temperature - min_temp) / temp_range, 0.0, 1.0 - (props.temperature - min_temp) / temp_range, 0.8)
-        bgl.glBegin(bgl.GL_QUADS)
-        bgl.glVertex3f(start_x, region.height - base_y + base_len_y2, 0.0)
-        bgl.glVertex3f(start_x, region.height - base_y, 0.0)
-        bgl.glVertex3f(start_x + interval * (props.temperature - min_temp),
-                       region.height - base_y, 0.0)
-        bgl.glVertex3f(start_x + interval * (props.temperature - min_temp),
-                       region.height - base_y + base_len_y2, 0.0)
-        bgl.glEnd()
-        bgl.glDisable(bgl.GL_BLEND)
-
-    @staticmethod
-    def __draw_analog(region, props):
-        Thermometer.__draw_scale(props, region)
+        color = [
+            (props.temperature - min_temp) / temp_range,
+            0.0,
+            1.0 - (props.temperature - min_temp) / temp_range,
+            0.8
+        ]
+        bgl_draw_rect(
+            start_x,
+            region.height - base_y,
+            start_x + interval * (props.temperature - min_temp),
+            region.height - base_y + base_len_y2,
+            color
+        )
 
     @staticmethod
-    def __draw_digital(region, props):
-        blf.size(0, 16, 72)
-        blf.position(0, 40, region.height - 60, 0)
-        blf.draw(0, "{0}".format(props.temperature))
+    def __draw_digital(region, props, prefs):
+        blf.size(0, prefs.digi_font_size, 72)
+        blf.position(
+            0,
+            prefs.digi_position[0],
+            region.height - prefs.digi_position[1],
+            0
+        )
+        blf.draw(0, "{0:.1f}".format(props.temperature))
 
     @staticmethod
     def __render(context):
+        # supress error when this add-on is disabled
         if not hasattr(context.scene, "t_props"):
             return
         props = context.scene.t_props
+        prefs = context.user_preferences.addons[__name__].preferences
 
-        region = Thermometer.__get_region(context, 'VIEW_3D', 'WINDOW')
+        # there is no region to render
+        region = get_region(context, 'VIEW_3D', 'WINDOW')
         if region is None:
             return
 
-        Thermometer.__draw_digital(region, props)
-        Thermometer.__draw_analog(region, props)
+        Thermometer.__draw_digital(region, props, prefs)
+        Thermometer.__draw_analog(region, props, prefs)
+
+    # output temperature data to the file
+    def __output_log(self, props, prefs):
+        with open(prefs.log_path, "a") as f:
+            date = datetime.now().strftime("%Y.%m.%d.%H.%M.%S")
+            f.write("{0},{1:.1f}\n".format(date, props.temperature))
 
     def modal(self, context, event):
         props = context.scene.t_props
@@ -245,9 +269,9 @@ class Thermometer(bpy.types.Operator):
             context.area.tag_redraw()
 
         self.__get_temperature(props, prefs)
-
         self.__update_text(props)
         self.__update_suzanne(props)
+        self.__output_log(props, prefs)
 
         return {'PASS_THROUGH'}
 
@@ -257,7 +281,7 @@ class Thermometer(bpy.types.Operator):
             props.running = True
             if Thermometer.__timer is None:
                 Thermometer.__timer = context.window_manager.event_timer_add(
-                    0.1, context.window
+                    1.0, context.window
                 )
                 context.window_manager.modal_handler_add(self)
                 Thermometer.__handle_add(self, context)
@@ -297,13 +321,44 @@ class T_Preferences(bpy.types.AddonPreferences):
 
     bus_path = StringProperty(
         name="Bus",
-        description="Path of the bus to get Temerature",
+        description="File Path which will be able to get Temerature",
         default="/tmp/bus.txt"
+    )
+    log_path = StringProperty(
+        name="Log Path"
+        description="File Path to be output Log"
+        default="./temperature.log"
+    )
+    digi_font_size = IntProperty(
+        name="Font Size",
+        default=16,
+        min=10,
+        max=40
+    )
+    digi_position = IntVectorProperty(
+        name="Position",
+        default=(40, 60),
+        size=2,
+        min=0
+    )
+    ana_position = IntVectorProperty(
+        name="Position",
+        default=(40, 100),
+        size=2,
+        min=0
     )
 
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "bus_path")
+        layout.prop(self, "log_path")
+
+        layout.label("Digital Display:")
+        layout.prop(self, "digi_font_size")
+        layout.prop(self, "digi_position")
+
+        layout.label("Analog Display:")
+        layout.prop(self, "ana_position")
 
 
 def init_props():
