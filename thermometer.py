@@ -3,6 +3,8 @@ from datetime import datetime
 import bpy
 from bpy.props import (
         BoolProperty,
+        IntProperty,
+        IntVectorProperty,
         FloatProperty,
         StringProperty,
         PointerProperty
@@ -11,7 +13,6 @@ from bpy.app.handlers import persistent
 from mathutils import Color
 import bgl
 import blf
-
 
 
 bl_info = {
@@ -172,41 +173,18 @@ class Thermometer(bpy.types.Operator):
     @staticmethod
     def __draw_analog(region, props, prefs):
         start_x = prefs.ana_position[0]
-        end_x = prefs.ana_position[0] + 460.0
+        end_x = prefs.ana_position[0] + 400.0 * prefs.digi_scale_x
         base_y = prefs.ana_position[1]
-        base_len_y1 = 3.0
-        base_len_y2 = 10.0
+        long_len_y1 = 3.0
+        long_len_y2 = 10.0
+        middle_len = 6.0
+        short_len = 3.0
         min_temp = -10
         max_temp = 50
         temp_range = max_temp - min_temp
+        interval = (end_x - start_x) / temp_range
 
         blf.size(0, 12, 72)
-
-        bgl_draw_line(start_x, region.height - base_y,
-                      end_x, region.height - base_y)
-        interval = (end_x - start_x) / temp_range
-        for t in range(min_temp, max_temp + 1):
-            offset = interval * (t - min_temp)
-            if t % 10 == 0:
-                bgl_draw_line(start_x + offset,
-                              region.height - base_y - base_len_y1,
-                              start_x + offset,
-                              region.height - base_y + base_len_y2)
-                blf.position(0,
-                             start_x + offset - 2.0,
-                             region.height - base_y - base_len_y1 - 15.0,
-                             0)
-                blf.draw(0, "{0}".format(t))
-            elif t % 5 == 0:
-                bgl_draw_line(start_x + offset,
-                              region.height - base_y,
-                              start_x + offset,
-                              region.height - base_y + base_len_y2 / 2.0)
-            else:
-                bgl_draw_line(start_x + offset,
-                              region.height - base_y,
-                              start_x + offset,
-                              region.height - base_y + base_len_y2 / 4.0)
 
         color = [
             (props.temperature - min_temp) / temp_range,
@@ -218,9 +196,30 @@ class Thermometer(bpy.types.Operator):
             start_x,
             region.height - base_y,
             start_x + interval * (props.temperature - min_temp),
-            region.height - base_y + base_len_y2,
+            region.height - base_y + long_len_y2,
             color
         )
+
+        bgl_draw_line(start_x, region.height - base_y,
+                      end_x, region.height - base_y)
+
+        for t in range(min_temp, max_temp + 1):
+            x1 = start_x + interval * (t - min_temp)
+            x2 = x1
+            if t % 10 == 0:
+                y1 = region.height - base_y - long_len_y1
+                y2 = region.height - base_y + long_len_y2
+                bgl_draw_line(x1, y1, x2, y2)
+                blf.position(0, x1 - 2.0, y1 - 15.0, 0)
+                blf.draw(0, "{0}".format(t))
+            elif t % 5 == 0:
+                y1 = region.height - base_y
+                y2 = region.height - base_y + middle_len
+                bgl_draw_line(x1, y1, x2, y2)
+            else:
+                y1 = region.height - base_y
+                y2 = region.height - base_y + short_len
+                bgl_draw_line(x1, y1, x2, y2)
 
     @staticmethod
     def __draw_digital(region, props, prefs):
@@ -231,7 +230,7 @@ class Thermometer(bpy.types.Operator):
             region.height - prefs.digi_position[1],
             0
         )
-        blf.draw(0, "{0:.1f}".format(props.temperature))
+        blf.draw(0, "{0:.1f}℃".format(props.temperature))
 
     @staticmethod
     def __render(context):
@@ -246,8 +245,10 @@ class Thermometer(bpy.types.Operator):
         if region is None:
             return
 
-        Thermometer.__draw_digital(region, props, prefs)
-        Thermometer.__draw_analog(region, props, prefs)
+        if prefs.render_digital:
+            Thermometer.__draw_digital(region, props, prefs)
+        if prefs.render_analog:
+            Thermometer.__draw_analog(region, props, prefs)
 
     # output temperature data to the file
     def __output_log(self, props, prefs):
@@ -269,9 +270,11 @@ class Thermometer(bpy.types.Operator):
             context.area.tag_redraw()
 
         self.__get_temperature(props, prefs)
-        self.__update_text(props)
-        self.__update_suzanne(props)
-        self.__output_log(props, prefs)
+        if prefs.gen_meshes:
+            self.__update_text(props)
+            self.__update_suzanne(props)
+        if prefs.logging:
+            self.__output_log(props, prefs)
 
         return {'PASS_THROUGH'}
 
@@ -319,21 +322,39 @@ class T_Preferences(bpy.types.AddonPreferences):
 
     bl_idname = __name__
 
+    render_digital = BoolProperty(
+        name="Render Digital",
+        default=True
+    )
+    render_analog = BoolProperty(
+        name="Render Analog",
+        default=True
+    )
+    gen_meshes = BoolProperty(
+        name="Generate Meshes",
+        default=True
+    )
+    logging = BoolProperty(
+        name="Log Output",
+        default=True
+    )
+
     bus_path = StringProperty(
         name="Bus",
         description="File Path which will be able to get Temerature",
-        default="/tmp/bus.txt"
+        default="./test.txt"
     )
     log_path = StringProperty(
-        name="Log Path"
-        description="File Path to be output Log"
+        name="Log Path",
+        description="File Path to be output Log",
         default="./temperature.log"
     )
+
     digi_font_size = IntProperty(
         name="Font Size",
-        default=16,
+        default=25,
         min=10,
-        max=40
+        max=80
     )
     digi_position = IntVectorProperty(
         name="Position",
@@ -341,6 +362,13 @@ class T_Preferences(bpy.types.AddonPreferences):
         size=2,
         min=0
     )
+    digi_scale_x = FloatProperty(
+        name="X",
+        default=1.0,
+        min=0.1,
+        max=2.0
+    )
+
     ana_position = IntVectorProperty(
         name="Position",
         default=(40, 100),
@@ -350,15 +378,39 @@ class T_Preferences(bpy.types.AddonPreferences):
 
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, "bus_path")
-        layout.prop(self, "log_path")
+
+        row = layout.row()
+        row.prop(self, "render_digital")
+        row.prop(self, "render_analog")
+        row.prop(self, "gen_meshes")
+        row.prop(self, "logging")
+
+        layout.separator()
+
+        sub = layout.split(percentage=0.7)
+        col = sub.column()
+        col.prop(self, "bus_path")
+        col.prop(self, "log_path")
+
+        layout.separator()
 
         layout.label("Digital Display:")
-        layout.prop(self, "digi_font_size")
-        layout.prop(self, "digi_position")
+        sub = layout.split(percentage=0.2)
+        col = sub.column()
+        col.label("Font:")
+        col.prop(self, "digi_font_size")
+        sub = sub.split(percentage=0.2)
+        sub.prop(self, "digi_position")
+        sub = sub.split(percentage=0.3)
+        col = sub.column()
+        col.label("Scale:")
+        col.prop(self, "digi_scale_x")
+
+        layout.separator()
 
         layout.label("Analog Display:")
-        layout.prop(self, "ana_position")
+        sub = layout.split(percentage=0.2)
+        sub.prop(self, "ana_position")
 
 
 def init_props():
