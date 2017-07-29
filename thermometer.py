@@ -153,11 +153,13 @@ class Thermometer(bpy.types.Operator):
         min_temp = -10
         max_temp = 50
         temp_range = max_temp - min_temp
-        mtrl.diffuse_color = Color((
-            (props.temperature - min_temp) / temp_range,
-            0.0,
-            1.0 - (props.temperature - min_temp) / temp_range
-        ))
+        color = Color()
+        color.hsv = (
+            1.0 - (((props.temperature-min_temp)/(temp_range-10))*270+90)/360,
+            0.95,
+            1.0
+        )
+        mtrl.diffuse_color = color
 
     def __update_suzanne(self, props):
         # make object
@@ -181,11 +183,13 @@ class Thermometer(bpy.types.Operator):
         min_temp = -10
         max_temp = 50
         temp_range = max_temp - min_temp
-        mtrl.diffuse_color = Color((
-            (props.temperature - min_temp) / temp_range,
-            0.0,
-            1.0 - (props.temperature - min_temp) / temp_range
-        ))
+        color = Color()
+        color.hsv = (
+            1.0 - (((props.temperature-min_temp)/(temp_range-10))*270+90)/360,
+            0.95,
+            1.0
+        )
+        mtrl.diffuse_color = color
 
     @staticmethod
     def __draw_analog(region, props, prefs):
@@ -203,18 +207,18 @@ class Thermometer(bpy.types.Operator):
 
         blf.size(0, 12, 72)
 
-        color = [
-            (props.temperature - min_temp) / temp_range,
-            0.0,
-            1.0 - (props.temperature - min_temp) / temp_range,
-            0.8
-        ]
+        color = Color()
+        color.hsv = (
+            1.0 - (((props.temperature-min_temp)/(temp_range-10))*270+90)/360,
+            0.8,
+            1.0
+        )
         bgl_draw_rect(
             start_x,
             region.height - base_y,
             start_x + interval * (props.temperature - min_temp),
             region.height - base_y + long_len_y2,
-            color
+            (color[0], color[1], color[2], 0.6)
         )
 
         bgl_draw_line(start_x, region.height - base_y,
