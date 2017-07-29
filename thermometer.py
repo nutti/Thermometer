@@ -187,7 +187,7 @@ class Thermometer(bpy.types.Operator):
         color.hsv = (
             1.0 - (((props.temperature-min_temp)/(temp_range-10))*270+90)/360,
             0.95,
-            1.0
+            0.85
         )
         mtrl.diffuse_color = color
 
