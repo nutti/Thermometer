@@ -21,7 +21,7 @@ bl_info = {
     "version": (1, 0),
     "blender": (2, 77, 0),
     "location": "View 3D",
-    "description": "Measure and Display Thermometer with Raspberry PI",
+    "description": "Measure and Display Temperature with a Raspberry PI",
     "warning": "",
     "support": "TESTING",
     "wiki_url": "",
