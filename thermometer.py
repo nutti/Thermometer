@@ -140,7 +140,24 @@ class Thermometer(bpy.types.Operator):
             bpy.context.active_object.name = "Temperature_Text"
         text_obj = bpy.data.objects["Temperature_Text"]
         if text_obj.type == 'FONT':
-            text_obj.data.body = str(props.temperature)
+            text_obj.data.body = "{0:.1f}".format(props.temperature)
+
+        # make material slot
+        if len(text_obj.material_slots) == 0:
+            bpy.context.scene.objects.active = text_obj
+            bpy.ops.object.material_slot_add()
+            text_obj.material_slots[0].material = bpy.data.materials['Material']
+        mtrl = text_obj.material_slots[0].material
+
+        # change color
+        min_temp = -10
+        max_temp = 50
+        temp_range = max_temp - min_temp
+        mtrl.diffuse_color = Color((
+            (props.temperature - min_temp) / temp_range,
+            0.0,
+            1.0 - (props.temperature - min_temp) / temp_range
+        ))
 
     def __update_suzanne(self, props):
         # make object
